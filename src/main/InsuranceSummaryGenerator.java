@@ -12,11 +12,6 @@ public class InsuranceSummaryGenerator {
 		String inputFile = "Transaction_Report.xlsx";
 		String outputFile = "Insurance_Summary.xlsx";
 		
-		// TODO:
-		// Horizontal Sums
-		// Vertical Sums
-		// Display the =val1+val2 for Health Insurance instead of just the sum
-		
 		try {
 			processInsuranceData(inputFile, outputFile);
 			System.out.println("Insurance summary generated successfully!");
@@ -132,6 +127,10 @@ public class InsuranceSummaryGenerator {
 		
 		Sheet sheet = wb.createSheet(sanitizeSheetName(insuranceType));
 		
+		CellStyle accountingStyle = wb.createCellStyle();
+		DataFormat format = wb.createDataFormat();
+		accountingStyle.setDataFormat(format.getFormat("_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)"));
+		
 		Map<String, Map<String, List<Double>>> employeeData = new LinkedHashMap<>();
 		List<String> dateList = new ArrayList<>(allDates);
 		List<String> employeeList = new ArrayList<>(allEmployees);
@@ -163,24 +162,33 @@ public class InsuranceSummaryGenerator {
 		headerRow.createCell(0).setCellValue(insuranceType);
 		
 		int currentRow = 1;
+		int dataStartCol = 5;
 		
 		// create rows per employee
 		for (String employee : employeeList) {
 			Row row = sheet.createRow(currentRow);
-			int currentCol = 0;
+			int currentCol = dataStartCol;
+			
+			row.createCell(2).setCellValue(employee);
 			
 			// for each date create Amount, Name, Date columns
 			for (String date : relevantDateList) {
 				List<Double> amounts = employeeData.get(employee).get(date);
 				
 				if (!amounts.isEmpty()) {
-					// amt cell - sum all amounts as a single value
+					// amt cell
 					Cell amountCell = row.createCell(currentCol);
-					double total = 0.0;
-					for (double amt : amounts) {
-						total += amt;
+					amountCell.setCellStyle(accountingStyle);
+					if (amounts.size() == 1) {
+						amountCell.setCellValue(amounts.get(0));
+					} else {
+						StringBuilder formula = new StringBuilder();
+						for (int i = 0; i < amounts.size(); i++) {
+							if (i > 0) formula.append("+");
+							formula.append(amounts.get(i));
+						}
+						amountCell.setCellFormula(formula.toString());
 					}
-					amountCell.setCellValue(total);
 					
 					// name
 					row.createCell(currentCol + 1).setCellValue(employee);
@@ -191,18 +199,66 @@ public class InsuranceSummaryGenerator {
 				// move to next date group (4 cols)
 				currentCol += 4;
 			}
+			
+			if (!relevantDateList.isEmpty()) {
+				int startCol = dataStartCol;
+				int endCol = dataStartCol + ((relevantDateList.size() - 1) * 4);
+				String formula = String.format("SUM(%s%d:%s%d)", getColumnLetter(startCol), currentRow, getColumnLetter(endCol), currentRow);
+				Cell totalCell = row.createCell(3);
+				totalCell.setCellStyle(accountingStyle);
+				totalCell.setCellFormula(formula);
+			}
+			
 			currentRow++;
 		}
 		
 		// total row
 		Row totalRow = sheet.createRow(currentRow);
-		int currentCol = 0;
+		int currentCol = dataStartCol;
 		
-		for (String date : relevantDateList) {
-			totalRow.createCell(currentCol).setCellValue("Total");
+		for (int i = 0; i < relevantDateList.size(); i++) {
+			String columnLetter = getColumnLetter(currentCol);
+			String formula = String.format("SUM(%s2:%s%d)", columnLetter, columnLetter, currentRow);
+			Cell totalCell = totalRow.createCell(currentCol);
+			totalCell.setCellStyle(accountingStyle);
+			totalCell.setCellFormula(formula);
+			
 			// move to next date group
 			currentCol += 4;
 		}
+		
+		// grand total in horizontal sum section
+		totalRow.createCell(2).setCellValue("Total");
+		String totalFormula = String.format("SUM(D2:D%d)", currentRow);
+		Cell grandTotalCell = totalRow.createCell(3);
+		grandTotalCell.setCellStyle(accountingStyle);
+		grandTotalCell.setCellFormula(totalFormula);
+		
+		sheet.autoSizeColumn(2);
+		sheet.setColumnWidth(3, 110 * 37);
+		
+		currentCol = dataStartCol;
+		for (int i = 0; i < relevantDateList.size(); i++) {
+			sheet.setColumnWidth(currentCol, 92 * 37);
+			sheet.autoSizeColumn(currentCol + 1);
+			sheet.autoSizeColumn(currentCol + 2);
+			
+			currentCol += 4;
+	    }
+	}
+	
+	private static String getColumnLetter(int col) {
+		StringBuilder result = new StringBuilder();
+		while (col >= 0) {
+			result.insert(0, (char)('A' + (col % 26)));
+			col = (col / 26) - 1;
+		}
+		return result.toString();
+	}
+	
+	@SuppressWarnings("unused")
+	private static String getCellReference(int row, int col) {
+		return getColumnLetter(col) + (row + 1);
 	}
 	
 	private static String sanitizeSheetName(String name) {

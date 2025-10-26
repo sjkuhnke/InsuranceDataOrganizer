@@ -1,1 +1,7 @@
 /bin/
+*.xls
+*.xlsx
+*.xlsm
+*.xlsb
+*.xltx
+*.xltm
