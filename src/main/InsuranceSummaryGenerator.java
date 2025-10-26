@@ -24,7 +24,7 @@ public class InsuranceSummaryGenerator {
 		String inputDirectory = fileChooser.getDirectory();
 		
 		if (inputFile != null && inputDirectory != null) {
-			String fullInputPath = inputDirectory + inputFile;			
+			String fullInputPath = inputDirectory + inputFile;
 			System.out.println("Selected input file: " + fullInputPath);
 			
 			// OUTPUT
