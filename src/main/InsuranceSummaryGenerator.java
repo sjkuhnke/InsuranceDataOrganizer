@@ -50,67 +50,69 @@ public class InsuranceSummaryGenerator {
 				} catch (Exception e) {
 					JOptionPane.showMessageDialog(null, e.getMessage());
 					e.printStackTrace();
+					System.exit(1);
 				}
+				System.exit(0);
 			} else {
 				System.out.println("Save location selection cancelled.");
 				JOptionPane.showMessageDialog(null, "Save location selection cancelled.");
+				System.exit(0);
 			}
 		} else {
 			System.out.println("Input file selection cancelled.");
 			JOptionPane.showMessageDialog(null, "Input file selection cancelled.");
+			System.exit(0);
 		}
 	}
 
-	public static void processInsuranceData(String inputFile, String outputFile) throws IOException {
-		// input
-		FileInputStream fis = new FileInputStream(inputFile);
-		Workbook inputWorkbook = WorkbookFactory.create(fis);
-		Sheet inputSheet = inputWorkbook.getSheetAt(0);
-		
+	public static void processInsuranceData(String inputFile, String outputFile) throws IOException {		
 		// data structures!
 		Map<String, List<InsuranceEntry>> insuranceByType = new LinkedHashMap<>();
 		Set<String> allDates = new LinkedHashSet<>();
 		Set<String> allEmployees = new LinkedHashSet<>();
 		
-		System.out.println("Starting to read data...");
-		
-		// read starting from row 3 (could change, this is just to be safe)
-		for (int i = 3; i <= inputSheet.getLastRowNum(); i++) {
-			Row row = inputSheet.getRow(i);
-			if (row == null) continue;
+		try (FileInputStream fis = new FileInputStream(inputFile);
+			Workbook inputWorkbook = WorkbookFactory.create(fis)) {
 			
-			// column C for Transaction Type
-			Cell transactionTypeCell = row.getCell(2);
-			if (transactionTypeCell == null || !getCellValue(transactionTypeCell).equals("Payroll Check")) {
-				continue;
+			Sheet inputSheet = inputWorkbook.getSheetAt(0);
+			
+			System.out.println("Starting to read data...");
+			
+			// read starting from row 3 (could change, this is just to be safe)
+			for (int i = 3; i <= inputSheet.getLastRowNum(); i++) {
+				Row row = inputSheet.getRow(i);
+				if (row == null) continue;
+				
+				// column C for Transaction Type
+				Cell transactionTypeCell = row.getCell(2);
+				if (transactionTypeCell == null || !getCellValue(transactionTypeCell).equals("Payroll Check")) {
+					continue;
+				}
+				
+				// data
+				String date = getCellValue(row.getCell(1)); // column B
+				String employeeName = getCellValue(row.getCell(4)); // column E
+				String memoDesc = getCellValue(row.getCell(5)); // column F
+				double amount = getNumericValue(row.getCell(8)); // column I
+				
+				if (amount == 0.0 || memoDesc.isEmpty()) continue;
+				
+				// categorize insurance types
+				String insuranceType = categorizeInsurance(memoDesc);
+				if (insuranceType == null) continue;
+				
+				// store entry
+				InsuranceEntry entry = new InsuranceEntry(employeeName, date, insuranceType, amount);
+				insuranceByType.computeIfAbsent(insuranceType, k -> new ArrayList<>()).add(entry);
+				allDates.add(date);
+				allEmployees.add(employeeName);
 			}
 			
-			// data
-			String date = getCellValue(row.getCell(1)); // column B
-			String employeeName = getCellValue(row.getCell(4)); // column E
-			String memoDesc = getCellValue(row.getCell(5)); // column F
-			double amount = getNumericValue(row.getCell(8)); // column I
-			
-			if (amount == 0.0 || memoDesc.isEmpty()) continue;
-			
-			// categorize insurance types
-			String insuranceType = categorizeInsurance(memoDesc);
-			if (insuranceType == null) continue;
-			
-			// store entry
-			InsuranceEntry entry = new InsuranceEntry(employeeName, date, insuranceType, amount);
-			insuranceByType.computeIfAbsent(insuranceType, k -> new ArrayList<>()).add(entry);
-			allDates.add(date);
-			allEmployees.add(employeeName);
+			System.out.println("Found " + insuranceByType.size() + " insurance types");
+			System.out.println("Insurance types: " + insuranceByType.keySet());
+			System.out.println("Total dates: " + allDates.size());
+			System.out.println("Total employees: " + allEmployees.size());
 		}
-		
-		System.out.println("Found " + insuranceByType.size() + " insurance types");
-		System.out.println("Insurance types: " + insuranceByType.keySet());
-		System.out.println("Total dates: " + allDates.size());
-		System.out.println("Total employees: " + allEmployees.size());
-		
-		fis.close();
-		inputWorkbook.close();
 		
 		// failsafe: don't create empty workbooks
 		if (insuranceByType.isEmpty()) {
@@ -140,10 +142,11 @@ public class InsuranceSummaryGenerator {
 		System.out.println("\nWriting output file...");
 		
 		// write output file
-		FileOutputStream fos = new FileOutputStream(outputFile);
-		outputWorkbook.write(fos);
-		fos.close();
-		outputWorkbook.close();
+		try (FileOutputStream fos = new FileOutputStream(outputFile)) {
+			outputWorkbook.write(fos);
+		} finally {
+			outputWorkbook.close();
+		}
 		
 		System.out.println("Output file written");
 		JOptionPane.showMessageDialog(null, "Data succesfully written to " + outputFile + "!");
