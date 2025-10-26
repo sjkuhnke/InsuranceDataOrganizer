@@ -1,7 +1,12 @@
 package main;
 
+import java.awt.FileDialog;
+import java.awt.Frame;
+
 import java.io.*;
 import java.util.*;
+
+import javax.swing.JOptionPane;
 
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -9,14 +14,50 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 public class InsuranceSummaryGenerator {
 	
 	public static void main(String[] args) {
-		String inputFile = "Transaction_Report.xlsx";
-		String outputFile = "Insurance_Summary.xlsx";
 		
-		try {
-			processInsuranceData(inputFile, outputFile);
-			System.out.println("Insurance summary generated successfully!");
-		} catch (Exception e) {
-			e.printStackTrace();
+		// INPUT
+		FileDialog fileChooser = new FileDialog((Frame) null, "Select Transaction Report Excel File", FileDialog.LOAD);
+		fileChooser.setFile("*.xlsx;*.xls");
+		fileChooser.setVisible(true);
+		
+		String inputFile = fileChooser.getFile();
+		String inputDirectory = fileChooser.getDirectory();
+		
+		if (inputFile != null && inputDirectory != null) {
+			String fullInputPath = inputDirectory + inputFile;			
+			System.out.println("Selected input file: " + fullInputPath);
+			
+			// OUTPUT
+			FileDialog saveChooser = new FileDialog((Frame) null, "Save Insurance Summary As", FileDialog.SAVE);
+			saveChooser.setFile("Insurance_Summary.xlsx");
+			saveChooser.setVisible(true);
+			
+			String outputFile = saveChooser.getFile();
+			String outputDirectory = saveChooser.getDirectory();
+
+			if (outputFile != null && outputDirectory != null) {
+				String fullOutputPath = outputDirectory + outputFile;
+				
+				if (!fullOutputPath.toLowerCase().endsWith(".xlsx")) {
+					fullOutputPath += ".xlsx";
+				}
+				
+				System.out.println("Output file will be saved to: " + fullOutputPath);
+				
+				try {
+					processInsuranceData(fullInputPath, fullOutputPath);
+					System.out.println("Insurance summary generated successfully!");
+				} catch (Exception e) {
+					JOptionPane.showMessageDialog(null, e.getMessage());
+					e.printStackTrace();
+				}
+			} else {
+				System.out.println("Save location selection cancelled.");
+				JOptionPane.showMessageDialog(null, "Save location selection cancelled.");
+			}
+		} else {
+			System.out.println("Input file selection cancelled.");
+			JOptionPane.showMessageDialog(null, "Input file selection cancelled.");
 		}
 	}
 
@@ -74,6 +115,7 @@ public class InsuranceSummaryGenerator {
 		// failsafe: don't create empty workbooks
 		if (insuranceByType.isEmpty()) {
 			System.err.println("WARNING: No insurance data found! Workbook not created.");
+			JOptionPane.showMessageDialog(null, "WARNING: No insurance data found! Workbook not created.");
 			return;
 		}
 		
@@ -90,6 +132,7 @@ public class InsuranceSummaryGenerator {
 				System.out.println("  Sheet created successfully");
 			} catch (Exception e) {
 				System.out.println("  ERROR creating sheet: " + e.getMessage());
+				JOptionPane.showMessageDialog(null, e.getMessage());
 				e.printStackTrace();
 			}
 		}
@@ -103,6 +146,7 @@ public class InsuranceSummaryGenerator {
 		outputWorkbook.close();
 		
 		System.out.println("Output file written");
+		JOptionPane.showMessageDialog(null, "Data succesfully written to " + outputFile + "!");
 	}
 	
 	private static String categorizeInsurance(String memoDesc) {
@@ -200,6 +244,8 @@ public class InsuranceSummaryGenerator {
 				currentCol += 4;
 			}
 			
+			currentRow++;
+			
 			if (!relevantDateList.isEmpty()) {
 				int startCol = dataStartCol;
 				int endCol = dataStartCol + ((relevantDateList.size() - 1) * 4);
@@ -208,8 +254,6 @@ public class InsuranceSummaryGenerator {
 				totalCell.setCellStyle(accountingStyle);
 				totalCell.setCellFormula(formula);
 			}
-			
-			currentRow++;
 		}
 		
 		// total row
